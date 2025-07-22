@@ -1,35 +1,268 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+// App.js (ou em um componente que você criar para isso)
+
+import { addEdge, applyEdgeChanges, applyNodeChanges, Controls, MiniMap, ReactFlow, Position, Handle } from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import { useCallback, useEffect, useState } from "react";
+import "./App.css";
+
+// Importe seus nós personalizados
+import ColorSelectorNode from './ColorSelectorNode';
+import InputNode from './InputNode';
+
+// --- Novos Componentes de Nó ---
+const PromptInputNode = ({ data }) => {
+  return (
+    <div style={{ padding: 10, border: '1px solid #ddd', borderRadius: 5, backgroundColor: '#f0f0f0' }}>
+      <label htmlFor="prompt" style={{ display: 'block', marginBottom: 5 }}>Prompt do Vídeo:</label>
+      <textarea
+        id="prompt"
+        name="prompt"
+        rows="4"
+        cols="30"
+        onChange={(e) => data.onChange(e.target.value)}
+        value={data.value}
+        className="nodrag" // Impede que o textarea arraste o nó
+        style={{ width: '100%', resize: 'vertical' }}
+      ></textarea>
+      <Handle type="source" position={Position.Right} id="a" style={{ top: '50%' }} />
+    </div>
+  );
+};
+
+const VideoDisplayNode = ({ data }) => {
+  return (
+    <div style={{ padding: 10, border: '1px solid #ddd', borderRadius: 5, backgroundColor: '#e0ffe0', minWidth: '320px' }}>
+      <h4>Vídeo Gerado:</h4>
+      {data.videoUrl ? (
+        <video controls src={data.videoUrl} style={{ maxWidth: '100%', height: 'auto', display: 'block', marginTop: 10 }} />
+      ) : (
+        <p>Aguardando geração do vídeo...</p>
+      )}
+      <Handle type="target" position={Position.Left} id="a" style={{ top: '50%' }} />
+    </div>
+  );
+};
+// --- Fim dos Novos Componentes de Nó ---
+
+const initialNodes = []; // Vamos definir os nós no useEffect
+const initialEdges = [];
+
+const initBgColor = '#c9f1dd';
+
+const snapGrid = [20, 20];
+const nodeTypes = {
+  selectorNode: ColorSelectorNode,
+  inputNode: InputNode,
+  promptInput: PromptInputNode, // Adicione o novo tipo de nó
+  videoDisplay: VideoDisplayNode, // Adicione o novo tipo de nó
+};
+
+const defaultViewport = { x: 0, y: 0, zoom: 1.0 };
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [nodes, setNodes] = useState(initialNodes);
+  const [edges, setEdges] = useState(initialEdges);
+  const [bgColor, setBgColor] = useState(initBgColor);
+  const [promptValue, setPromptValue] = useState(''); // Estado para o valor do prompt
+  const [generatedVideoUrl, setGeneratedVideoUrl] = useState(''); // Estado para a URL do vídeo gerado
+
+  const onNodesChange = useCallback(
+    (changes) =>
+      setNodes((nodesSnapshot) => applyNodeChanges(changes, nodesSnapshot)),
+    []
+  );
+  const onEdgesChange = useCallback(
+    (changes) =>
+      setEdges((edgesSnapshot) => applyEdgeChanges(changes, edgesSnapshot)),
+    []
+  );
+
+  const onChangeBgColor = (event) => {
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id !== '2') {
+          return node;
+        }
+
+        const color = event.target.value;
+        setBgColor(color);
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            color,
+          },
+        };
+      }),
+    );
+  };
+
+  const handlePromptChange = (value) => {
+    setPromptValue(value);
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id !== 'prompt-node-1') { // O ID do seu nó de prompt
+          return node;
+        }
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            value: value,
+          },
+        };
+      }),
+    );
+  };
+
+  const generateVideo = async () => {
+    if (!promptValue) {
+      alert('Por favor, insira um prompt para gerar o vídeo.');
+      return;
+    }
+
+    try {
+      setGeneratedVideoUrl(''); // Limpa a URL anterior enquanto gera
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (node.id === 'video-node-1') { // O ID do seu nó de exibição de vídeo
+            return {
+              ...node,
+              data: { ...node.data, videoUrl: null }, // Limpa a URL para mostrar "Aguardando..."
+            };
+          }
+          return node;
+        })
+      );
+
+      console.log('Enviando prompt para o backend:', promptValue);
+      const response = await fetch('http://localhost:3001/api/generate-video', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt: promptValue }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || 'Falha na requisição ao backend.');
+      }
+
+      const data = await response.json();
+      console.log('URL do vídeo recebida:', data.videoUrl);
+      setGeneratedVideoUrl(data.videoUrl);
+
+      // Atualiza o nó de exibição de vídeo com a URL
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (node.id === 'video-node-1') {
+            return {
+              ...node,
+              data: { ...node.data, videoUrl: data.videoUrl },
+            };
+          }
+          return node;
+        })
+      );
+
+    } catch (error) {
+      console.error('Erro ao gerar vídeo:', error);
+      alert('Erro ao gerar vídeo: ' + error.message);
+    }
+  };
+
+
+  useEffect(() => {
+    setNodes([
+      {
+        id: '1',
+        type: 'inputNode',
+        data: { label: 'Node Inicial' },
+        position: { x: 0, y: 50 },
+        sourcePosition: 'right',
+      },
+      {
+        id: '2',
+        type: 'selectorNode',
+        data: { onChange: onChangeBgColor, color: bgColor },
+        position: { x: 300, y: 50 },
+      },
+      {
+        id: 'prompt-node-1', // Novo nó para o prompt
+        type: 'promptInput',
+        data: { onChange: handlePromptChange, value: promptValue },
+        position: { x: 0, y: 200 },
+        sourcePosition: 'right',
+      },
+      {
+        id: 'video-node-1', // Novo nó para exibir o vídeo
+        type: 'videoDisplay',
+        data: { videoUrl: generatedVideoUrl },
+        position: { x: 500, y: 200 },
+        targetPosition: 'left',
+      },
+      {
+        id: '3',
+        type: 'output',
+        data: { label: 'Output A' },
+        position: { x: 650, y: 25 },
+        targetPosition: 'left',
+      },
+      {
+        id: '4',
+        type: 'output',
+        data: { label: 'Output B' },
+        position: { x: 650, y: 100 },
+        targetPosition: 'left',
+      },
+    ]);
+
+    setEdges([
+      { id: 'e1-2', source: '1', target: '2', animated: true },
+      { id: 'e2a-3', source: '2', target: '3', animated: true },
+      { id: 'e2b-4', source: '2', target: '4', animated: true },
+      { id: 'e-prompt-video', source: 'prompt-node-1', target: 'video-node-1', animated: true, type: 'step' },
+    ]);
+  }, [bgColor, promptValue, generatedVideoUrl]); // Dependências para re-renderizar quando promptValue ou generatedVideoUrl muda
+
+  const onConnect = useCallback(
+    (params) => setEdges((eds) => addEdge({ ...params, animated: true }, eds)),
+    [],
+  );
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <div style={{ width: '100vw', height: '100vh' }}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        nodeTypes={nodeTypes}
+        snapToGrid={true}
+        snapGrid={snapGrid}
+        defaultViewport={defaultViewport}
+        fitView
+        attributionPosition="bottom-left"
+        style={{ background: bgColor }}
+      >
+        <MiniMap
+          nodeColor={(n) => {
+            return '#fff';
+          }}
+        />
+        <Controls />
+        {/* Botão para gerar vídeo */}
+        <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 10, background: 'white', padding: 10, borderRadius: 5, boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+          <button onClick={generateVideo} style={{ padding: '8px 15px', cursor: 'pointer', fontSize: '16px' }}>
+            Gerar Vídeo com Veo 3
+          </button>
+        </div>
+      </ReactFlow>
+    </div>
+  );
 }
 
-export default App
+export default App;
