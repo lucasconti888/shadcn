@@ -1,50 +1,16 @@
-// App.js (ou em um componente que você criar para isso)
-
-import { addEdge, applyEdgeChanges, applyNodeChanges, Controls, MiniMap, ReactFlow, Position, Handle } from "@xyflow/react";
+import { addEdge, applyEdgeChanges, applyNodeChanges, Controls, MiniMap, ReactFlow } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 
-// Importe seus nós personalizados
+// --- Importe todos os seus nós personalizados de arquivos separados ---
 import ColorSelectorNode from './ColorSelectorNode';
 import InputNode from './InputNode';
+import PromptInputNode from './PromptInputNode'; // Importe o novo nó
+import VideoDisplayNode from './VideoDisplayNode'; // Importe o novo nó
+// --- Fim das Importações de Nós Personalizados ---
 
-// --- Novos Componentes de Nó ---
-const PromptInputNode = ({ data }) => {
-  return (
-    <div style={{ padding: 10, border: '1px solid #ddd', borderRadius: 5, backgroundColor: '#f0f0f0' }}>
-      <label htmlFor="prompt" style={{ display: 'block', marginBottom: 5 }}>Prompt do Vídeo:</label>
-      <textarea
-        id="prompt"
-        name="prompt"
-        rows="4"
-        cols="30"
-        onChange={(e) => data.onChange(e.target.value)}
-        value={data.value}
-        className="nodrag" // Impede que o textarea arraste o nó
-        style={{ width: '100%', resize: 'vertical' }}
-      ></textarea>
-      <Handle type="source" position={Position.Right} id="a" style={{ top: '50%' }} />
-    </div>
-  );
-};
-
-const VideoDisplayNode = ({ data }) => {
-  return (
-    <div style={{ padding: 10, border: '1px solid #ddd', borderRadius: 5, backgroundColor: '#e0ffe0', minWidth: '320px' }}>
-      <h4>Vídeo Gerado:</h4>
-      {data.videoUrl ? (
-        <video controls src={data.videoUrl} style={{ maxWidth: '100%', height: 'auto', display: 'block', marginTop: 10 }} />
-      ) : (
-        <p>Aguardando geração do vídeo...</p>
-      )}
-      <Handle type="target" position={Position.Left} id="a" style={{ top: '50%' }} />
-    </div>
-  );
-};
-// --- Fim dos Novos Componentes de Nó ---
-
-const initialNodes = []; // Vamos definir os nós no useEffect
+const initialNodes = []; // Definiremos os nós no useEffect
 const initialEdges = [];
 
 const initBgColor = '#c9f1dd';
@@ -77,16 +43,14 @@ function App() {
     []
   );
 
-  const onChangeBgColor = (event) => {
+  const onChangeBgColor = useCallback((event) => {
     setNodes((nds) =>
       nds.map((node) => {
         if (node.id !== '2') {
           return node;
         }
-
         const color = event.target.value;
         setBgColor(color);
-
         return {
           ...node,
           data: {
@@ -96,27 +60,28 @@ function App() {
         };
       }),
     );
-  };
+  }, []); // Dependência vazia, pois não depende de estado externo
 
-  const handlePromptChange = (value) => {
+  const handlePromptChange = useCallback((value) => {
     setPromptValue(value);
     setNodes((nds) =>
       nds.map((node) => {
-        if (node.id !== 'prompt-node-1') { // O ID do seu nó de prompt
-          return node;
+        if (node.id === 'prompt-node-1') { // O ID do seu nó de prompt
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              value: value,
+            },
+          };
         }
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            value: value,
-          },
-        };
+        return node;
       }),
     );
-  };
+  }, []); // Dependência vazia, pois não depende de estado externo
 
-  const generateVideo = async () => {
+
+  const generateVideo = useCallback(async () => {
     if (!promptValue) {
       alert('Por favor, insira um prompt para gerar o vídeo.');
       return;
@@ -137,6 +102,7 @@ function App() {
       );
 
       console.log('Enviando prompt para o backend:', promptValue);
+      // Ajuste a URL para o endereço do seu backend (e.g., 'http://localhost:3001/api/generate-video')
       const response = await fetch('http://localhost:3001/api/generate-video', {
         method: 'POST',
         headers: {
@@ -171,7 +137,7 @@ function App() {
       console.error('Erro ao gerar vídeo:', error);
       alert('Erro ao gerar vídeo: ' + error.message);
     }
-  };
+  }, [promptValue]); // Dependência: `promptValue` é usado dentro de `generateVideo`
 
 
   useEffect(() => {
@@ -199,7 +165,7 @@ function App() {
       {
         id: 'video-node-1', // Novo nó para exibir o vídeo
         type: 'videoDisplay',
-        data: { videoUrl: generatedVideoUrl },
+        data: { videoUrl: generatedVideoUrl }, // Passa a URL do vídeo para o nó
         position: { x: 500, y: 200 },
         targetPosition: 'left',
       },
@@ -223,9 +189,11 @@ function App() {
       { id: 'e1-2', source: '1', target: '2', animated: true },
       { id: 'e2a-3', source: '2', target: '3', animated: true },
       { id: 'e2b-4', source: '2', target: '4', animated: true },
+      // Conexão do nó de prompt para o nó de exibição de vídeo
       { id: 'e-prompt-video', source: 'prompt-node-1', target: 'video-node-1', animated: true, type: 'step' },
     ]);
-  }, [bgColor, promptValue, generatedVideoUrl]); // Dependências para re-renderizar quando promptValue ou generatedVideoUrl muda
+  }, [bgColor, promptValue, generatedVideoUrl, onChangeBgColor, handlePromptChange]); 
+  // Dependências do useEffect: todas as variáveis de estado e funções de callback usadas dentro dele.
 
   const onConnect = useCallback(
     (params) => setEdges((eds) => addEdge({ ...params, animated: true }, eds)),
