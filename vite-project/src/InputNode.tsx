@@ -1,9 +1,17 @@
-import { Handle, Position } from "@xyflow/react";
 import { memo } from "react";
-import { Button } from "./components/ui/button";
+import { Handle, Position } from "@xyflow/react";
 import { Input } from "./components/ui/input";
+import { Button } from "./components/ui/button";
 
-export default memo(({ data, isConnectable }) => {
+export const InputNode = ({ data, isConnectable }) => {
+  const handleInputChange = (e) => {
+    data?.onChange?.(e.currentTarget.value);
+  };
+
+  const handleGenerate = () => {
+    data?.generateFunnyText?.();
+  };
+
   return (
     <>
       <Handle
@@ -12,12 +20,17 @@ export default memo(({ data, isConnectable }) => {
         onConnect={(params) => console.log("handle onConnect", params)}
         isConnectable={isConnectable}
       />
-      {/* <div>
-        Tipo <strong>{data.color}</strong>
-      </div> */}
-      <div className="flex w-full max-w-sm items-center gap-2">
-        <Input defaultValue={data.color} type="email" placeholder="Tipo" />
-        <Button onChange={data.onChange} type="submit" variant="outline">
+      <div className="flex w-full max-w-sm items-center gap-2 p-2 bg-white rounded shadow">
+        <Input
+          onChange={handleInputChange}
+          placeholder="Tipo"
+          className="flex-1"
+        />
+        <Button
+          onClick={handleGenerate}
+          type="button"
+          variant="outline"
+        >
           Confirmar
         </Button>
       </div>
@@ -28,4 +41,6 @@ export default memo(({ data, isConnectable }) => {
       />
     </>
   );
-});
+};
+
+export default memo(InputNode);
