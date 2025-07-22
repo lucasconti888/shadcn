@@ -12,13 +12,13 @@ export default memo(({ data, isConnectable }) => {
         onConnect={(params) => console.log("handle onConnect", params)}
         isConnectable={isConnectable}
       />
-      <div>
-        Custom Color Picker Node: <strong>{data.color}</strong>
-      </div>
+      {/* <div>
+        Tipo <strong>{data.color}</strong>
+      </div> */}
       <div className="flex w-full max-w-sm items-center gap-2">
-        <Input defaultValue={data.color} type="email" placeholder="Email" />
+        <Input defaultValue={data.color} type="email" placeholder="Tipo" />
         <Button onChange={data.onChange} type="submit" variant="outline">
-          Subscribe
+          Confirmar
         </Button>
       </div>
       <Handle
